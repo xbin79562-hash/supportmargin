@@ -14,8 +14,6 @@ type BlogPostPageProps = {
 
 const siteUrl = "https://supportmargin.com";
 
-export const dynamicParams = false;
-
 export function generateStaticParams() {
   return getAllPostSlugs().map((slug) => ({ slug }));
 }
