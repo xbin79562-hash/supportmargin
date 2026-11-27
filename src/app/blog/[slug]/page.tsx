@@ -14,16 +14,24 @@ type BlogPostPageProps = {
 
 const siteUrl = "https://supportmargin.com";
 
+// Next.js 16 cacheComponents rejects the `dynamicParams` route segment config.
+// Keep the same closed-set boundary explicitly: only slugs present in the
+// published content directory are allowed and generateStaticParams prebuilds them.
+const knownPostSlugs = getAllPostSlugs();
+
 export function generateStaticParams() {
-  return getAllPostSlugs().map((slug) => ({ slug }));
+  return knownPostSlugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
   params,
 }: BlogPostPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  if (!knownPostSlugs.includes(slug)) {
+    return { title: "Article not found" };
+  }
 
+  const post = getPostBySlug(slug);
   if (!post) {
     return { title: "Article not found" };
   }
@@ -55,8 +63,9 @@ export async function generateMetadata({
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  if (!knownPostSlugs.includes(slug)) notFound();
 
+  const post = getPostBySlug(slug);
   if (!post) notFound();
 
   const articleUrl = `${siteUrl}/blog/${post.slug}`;
