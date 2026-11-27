@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:pricing": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/pricing-engine.test.mjs",
+    "test:blog": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/blog.test.mjs",
+    "test": "npm run test:pricing && npm run test:blog",
+    "check:pricing-drift": "node scripts/check-pricing-drift.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

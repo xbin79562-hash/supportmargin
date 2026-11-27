@@ -1,20 +1,62 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import JsonLd from "@/components/json-ld";
 import "./globals.css";
+
+const siteUrl = "https://supportmargin.com";
+const siteTitle = "SupportMargin — Independent e-commerce support research";
+const siteDescription =
+  "Working editorial notes on e-commerce support costs and lean helpdesk setups.";
 
 export const metadata: Metadata = {
   title: {
-    default: "SupportMargin — Independent e-commerce support research",
+    default: siteTitle,
     template: "%s | SupportMargin",
   },
-  description:
-    "Working editorial notes on e-commerce support costs and lean helpdesk setups.",
-  metadataBase: new URL("https://supportmargin.com"),
+  description: siteDescription,
+  metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "SupportMargin",
+    url: siteUrl,
+    title: siteTitle,
+    description: siteDescription,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitle,
+    description: siteDescription,
+  },
+};
+
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": `${siteUrl}/#organization`,
+  name: "SupportMargin",
+  url: siteUrl,
+  description: siteDescription,
+};
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": `${siteUrl}/#website`,
+  url: siteUrl,
+  name: "SupportMargin",
+  description: siteDescription,
+  publisher: { "@id": `${siteUrl}/#organization` },
+  inLanguage: "en",
 };
 
 const navItems = [
   { href: "/", label: "Research" },
   { href: "/gorgias-cost-calculator", label: "Cost calculator" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About" },
   { href: "/affiliate-disclosure", label: "Affiliate Disclosure" },
   { href: "/privacy-policy", label: "Privacy Policy" },
@@ -25,6 +67,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full font-sans antialiased">
+        <JsonLd data={organizationSchema} />
+        <JsonLd data={websiteSchema} />
         <div className="mx-auto flex min-h-full w-full max-w-[1180px] flex-col px-5 sm:px-8">
           <header className="border-b border-line">
             <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-4 py-6">

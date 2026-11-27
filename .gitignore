@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 .workbuddy/
+/content-pipeline/
 
 # debug
 npm-debug.log*

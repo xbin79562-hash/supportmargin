@@ -1,115 +1,38 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import pricingCatalog from "@/data/pricing-catalog.json";
 import {
   AFFILIATE_FALLBACK_HREF,
   affiliateLinks,
   getAffiliateUrl,
-  type AffiliateKey,
 } from "@/config/affiliates";
+import {
+  clamp,
+  computeScenario,
+  getDefaultAssumptions,
+  getDefaultInputs,
+  getGorgiasTiers,
+  type GorgiasTierId,
+  type ModelAssumptions,
+  type PricingCatalog,
+  type ScenarioInputs,
+} from "@/lib/pricing/engine";
 
 const CALCULATOR_SUB_ID = "gorgias_calc";
-const MONTHS_PER_YEAR = 12;
-
-type BillingCycle = "monthly" | "annual";
-
-type ScenarioInputs = {
-  tickets: number;
-  aiRate: number;
-  seats: number;
-  billing: BillingCycle;
-};
-
-type ModelAssumptions = {
-  gorgiasBase: number;
-  includedTickets: number;
-  overagePerTicket: number;
-  aiFeePerResolution: number;
-  seatFee: number;
-};
-
-type ComparisonCard = {
-  key: AffiliateKey;
-  label: string;
-  category: string;
-  monthlyBase: number;
-  includedTickets: number;
-  overagePerTicket: number;
-  aiFeePerResolution: number | null;
-};
-
-const DEFAULT_INPUTS: ScenarioInputs = {
-  tickets: 1000,
-  aiRate: 40,
-  seats: 2,
-  billing: "monthly",
-};
-
-const DEFAULT_ASSUMPTIONS: ModelAssumptions = {
-  gorgiasBase: 60,
-  includedTickets: 500,
-  overagePerTicket: 0.12,
-  aiFeePerResolution: 0.08,
-  seatFee: 20,
-};
-
-// Illustrative rate cards for scenario modelling only. These are not vendor prices.
-const COMPARISON_CARDS: ComparisonCard[] = [
-  {
-    key: "text",
-    label: "Text",
-    category: "Messaging",
-    monthlyBase: 45,
-    includedTickets: 600,
-    overagePerTicket: 0.09,
-    aiFeePerResolution: null,
-  },
-  {
-    key: "livechat",
-    label: "LiveChat",
-    category: "Live chat",
-    monthlyBase: 75,
-    includedTickets: 700,
-    overagePerTicket: 0.11,
-    aiFeePerResolution: 0.1,
-  },
-  {
-    key: "helpdesk",
-    label: "HelpDesk",
-    category: "Helpdesk",
-    monthlyBase: 90,
-    includedTickets: 900,
-    overagePerTicket: 0.08,
-    aiFeePerResolution: null,
-  },
-  {
-    key: "smartsupp",
-    label: "Smartsupp",
-    category: "Live chat",
-    monthlyBase: 55,
-    includedTickets: 500,
-    overagePerTicket: 0.1,
-    aiFeePerResolution: 0.09,
-  },
-  {
-    key: "zipchat",
-    label: "Zipchat AI",
-    category: "AI assistant",
-    monthlyBase: 40,
-    includedTickets: 400,
-    overagePerTicket: 0.07,
-    aiFeePerResolution: 0.06,
-  },
-];
+const catalog = pricingCatalog as unknown as PricingCatalog;
+const PRICING_LABEL = catalog.pricingLabel;
+const MONTHS_PER_YEAR = catalog.monthsPerYear;
+const GORGIAS_TIERS = getGorgiasTiers();
 
 const wholeMoney = new Intl.NumberFormat("en-US", {
   style: "currency",
-  currency: "USD",
+  currency: catalog.currency,
   maximumFractionDigits: 0,
 });
 const preciseMoney = new Intl.NumberFormat("en-US", {
   style: "currency",
-  currency: "USD",
+  currency: catalog.currency,
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -124,12 +47,7 @@ function moneyPrecise(value: number) {
 }
 
 function count(value: number) {
-  return wholeNumber.format(value);
-}
-
-function clamp(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
+  return wholeNumber.format(Math.round(value));
 }
 
 function RangeField({
@@ -191,12 +109,14 @@ function AssumptionField({
   label,
   value,
   step,
+  min = 0,
   onChange,
 }: {
   id: string;
   label: string;
   value: number;
   step: number;
+  min?: number;
   onChange: (value: number) => void;
 }) {
   return (
@@ -207,12 +127,12 @@ function AssumptionField({
       <input
         id={id}
         type="number"
-        min={0}
+        min={min}
         step={step}
         value={value}
         onChange={(event) => {
           const parsed = Number(event.target.value);
-          onChange(Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
+          onChange(Number.isFinite(parsed) ? Math.max(min, parsed) : min);
         }}
         className="mt-1 w-full border-b border-line bg-transparent pb-1 font-mono text-sm focus:border-accent focus:outline-none"
       />
@@ -221,65 +141,22 @@ function AssumptionField({
 }
 
 export default function GorgiasCostCalculator() {
-  const [inputs, setInputs] = useState<ScenarioInputs>(DEFAULT_INPUTS);
+  const [inputs, setInputs] = useState<ScenarioInputs>(() => getDefaultInputs());
   const [assumptions, setAssumptions] = useState<ModelAssumptions>(
-    DEFAULT_ASSUMPTIONS,
+    () => getDefaultAssumptions(),
   );
 
-  const model = useMemo(() => {
-    const aiResolutions = Math.round(
-      (inputs.tickets * inputs.aiRate) / 100,
-    );
-    const humanTickets = inputs.tickets - aiResolutions;
-    const overageTickets = Math.max(
-      0,
-      inputs.tickets - assumptions.includedTickets,
-    );
-    const ticketOverage = overageTickets * assumptions.overagePerTicket;
-    const aiCharges = aiResolutions * assumptions.aiFeePerResolution;
-    const seatCharges = inputs.seats * assumptions.seatFee;
-    const gorgiasMonthly =
-      assumptions.gorgiasBase + ticketOverage + aiCharges + seatCharges;
-    const months = inputs.billing === "annual" ? MONTHS_PER_YEAR : 1;
-
-    const comparisons = COMPARISON_CARDS.map((card) => {
-      const cardOverageTickets = Math.max(
-        0,
-        inputs.tickets - card.includedTickets,
-      );
-      const cardAiCharges =
-        card.aiFeePerResolution === null
-          ? 0
-          : aiResolutions * card.aiFeePerResolution;
-      const monthly =
-        card.monthlyBase +
-        cardOverageTickets * card.overagePerTicket +
-        cardAiCharges +
-        seatCharges;
-      const deltaMonthly = monthly - gorgiasMonthly;
-
-      return {
-        ...card,
-        monthly,
-        periodTotal: monthly * months,
-        deltaMonthly,
-        cardOverageTickets,
-        cardAiCharges,
-      };
-    });
-
-    return {
-      aiResolutions,
-      humanTickets,
-      overageTickets,
-      ticketOverage,
-      aiCharges,
-      seatCharges,
-      gorgiasMonthly,
-      gorgiasAnnual: gorgiasMonthly * MONTHS_PER_YEAR,
-      comparisons,
-    };
-  }, [inputs, assumptions]);
+  const monthlyModel = useMemo(
+    () => computeScenario(inputs, assumptions, "monthly"),
+    [inputs, assumptions],
+  );
+  const annualModel = useMemo(
+    () => computeScenario(inputs, assumptions, "annual"),
+    [inputs, assumptions],
+  );
+  const model = inputs.billing === "annual" ? annualModel : monthlyModel;
+  const currentMonthly = model.gorgias.monthly;
+  const currentAnnualized = currentMonthly * MONTHS_PER_YEAR;
 
   const cycleLabel = inputs.billing === "annual" ? "annual" : "monthly";
 
@@ -294,8 +171,7 @@ export default function GorgiasCostCalculator() {
             Scenario inputs
           </h2>
           <p className="mt-2 text-xs leading-6 text-muted">
-            Adjust the scenario. Outputs are illustrative model results, not
-            vendor quotes.
+            {PRICING_LABEL}. Outputs are scenario results, not vendor quotes.
           </p>
 
           <div className="mt-7 space-y-8">
@@ -303,9 +179,9 @@ export default function GorgiasCostCalculator() {
               id="tickets"
               label="Monthly ticket volume"
               hint="Tickets handled per month."
-              min={100}
-              max={5000}
-              step={50}
+              min={catalog.uiBounds.tickets.min}
+              max={catalog.uiBounds.tickets.max}
+              step={catalog.uiBounds.tickets.step}
               value={inputs.tickets}
               onChange={(tickets) => setInputs({ ...inputs, tickets })}
             />
@@ -313,19 +189,19 @@ export default function GorgiasCostCalculator() {
               id="ai-rate"
               label="AI resolution rate"
               hint="Share of tickets resolved without a human agent."
-              min={0}
-              max={80}
-              step={1}
+              min={catalog.uiBounds.aiRate.min}
+              max={catalog.uiBounds.aiRate.max}
+              step={catalog.uiBounds.aiRate.step}
               value={inputs.aiRate}
               onChange={(aiRate) => setInputs({ ...inputs, aiRate })}
             />
             <RangeField
               id="seats"
               label="Active support seats"
-              hint="Seats used for the per-seat cost assumption."
-              min={1}
-              max={10}
-              step={1}
+              hint="Used for seat-based comparison plans. Gorgias Helpdesk tiers include seats."
+              min={catalog.uiBounds.seats.min}
+              max={catalog.uiBounds.seats.max}
+              step={catalog.uiBounds.seats.step}
               value={inputs.seats}
               onChange={(seats) => setInputs({ ...inputs, seats })}
             />
@@ -355,62 +231,87 @@ export default function GorgiasCostCalculator() {
               ))}
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
-              Annual figures are 12× monthly; no discount is assumed.
+              Annual rates are distinct per-month rates, not monthly × 12.
             </p>
           </div>
 
           <details className="mt-8 border-t border-line pt-5">
             <summary className="cursor-pointer text-sm font-medium hover:text-accent">
-              Editable model assumptions
+              Editable pricing assumptions
             </summary>
             <p className="mt-3 text-xs leading-6 text-muted">
-              Illustrative values for scenario modelling. Replace them with
-              figures you verify from current vendor pricing.
+              {PRICING_LABEL}. Overages beyond plan AI allowances can be
+              higher; adjust the AI fee directly to test that risk.
             </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <AssumptionField
-                id="assumption-base"
-                label="Base platform fee / mo"
-                value={assumptions.gorgiasBase}
-                step={5}
-                onChange={(gorgiasBase) =>
-                  setAssumptions({ ...assumptions, gorgiasBase })
+
+            <div className="mt-5">
+              <label
+                htmlFor="gorgias-tier"
+                className="text-xs text-muted"
+              >
+                Gorgias Helpdesk tier
+              </label>
+              <select
+                id="gorgias-tier"
+                value={assumptions.gorgiasTier}
+                onChange={(event) =>
+                  setAssumptions({
+                    ...assumptions,
+                    gorgiasTier: event.target.value as GorgiasTierId,
+                  })
+                }
+                className="mt-1 w-full border-b border-line bg-transparent pb-1 font-mono text-sm focus:border-accent focus:outline-none"
+              >
+                <option value="auto">Auto — cheapest eligible tier</option>
+                {GORGIAS_TIERS.map((tier) => (
+                  <option
+                    key={tier.id}
+                    value={tier.id}
+                    disabled={
+                      (tier.monthlyOnly && inputs.billing === "annual") ||
+                      (tier.maxSeats !== undefined &&
+                        inputs.seats > tier.maxSeats)
+                    }
+                  >
+                    {tier.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-6 space-y-7">
+              <RangeField
+                id="ai-fee-monthly"
+                label="AI resolution fee — monthly"
+                hint={`Editable assumption: ${moneyPrecise(catalog.defaults.assumptions.aiFeeMonthly)}/resolution on monthly billing.`}
+                min={catalog.uiBounds.aiFee.min}
+                max={catalog.uiBounds.aiFee.max}
+                step={catalog.uiBounds.aiFee.step}
+                value={assumptions.aiFeeMonthly}
+                onChange={(aiFeeMonthly) =>
+                  setAssumptions({ ...assumptions, aiFeeMonthly })
+                }
+              />
+              <RangeField
+                id="ai-fee-annual"
+                label="AI resolution fee — annual"
+                hint={`Editable assumption: ${moneyPrecise(catalog.defaults.assumptions.aiFeeAnnual)}/resolution on annual billing.`}
+                min={catalog.uiBounds.aiFee.min}
+                max={catalog.uiBounds.aiFee.max}
+                step={catalog.uiBounds.aiFee.step}
+                value={assumptions.aiFeeAnnual}
+                onChange={(aiFeeAnnual) =>
+                  setAssumptions({ ...assumptions, aiFeeAnnual })
                 }
               />
               <AssumptionField
-                id="assumption-included"
-                label="Included tickets / mo"
-                value={assumptions.includedTickets}
-                step={50}
-                onChange={(includedTickets) =>
-                  setAssumptions({ ...assumptions, includedTickets })
-                }
-              />
-              <AssumptionField
-                id="assumption-overage"
-                label="Overage per ticket"
-                value={assumptions.overagePerTicket}
-                step={0.01}
-                onChange={(overagePerTicket) =>
-                  setAssumptions({ ...assumptions, overagePerTicket })
-                }
-              />
-              <AssumptionField
-                id="assumption-ai-fee"
-                label="AI fee per resolution"
-                value={assumptions.aiFeePerResolution}
-                step={0.01}
-                onChange={(aiFeePerResolution) =>
-                  setAssumptions({ ...assumptions, aiFeePerResolution })
-                }
-              />
-              <AssumptionField
-                id="assumption-seat"
-                label="Per-seat fee / mo"
-                value={assumptions.seatFee}
-                step={5}
-                onChange={(seatFee) =>
-                  setAssumptions({ ...assumptions, seatFee })
+                id="zipchat-replies"
+                label="Zipchat AI replies per resolution"
+                value={assumptions.zipchatRepliesPerResolution}
+                step={catalog.uiBounds.zipchatReplies.step}
+                min={catalog.uiBounds.zipchatReplies.min}
+                onChange={(zipchatRepliesPerResolution) =>
+                  setAssumptions({ ...assumptions, zipchatRepliesPerResolution })
                 }
               />
             </div>
@@ -418,17 +319,42 @@ export default function GorgiasCostCalculator() {
         </section>
 
         <section aria-labelledby="modeled-estimate">
-          <h2 id="modeled-estimate" className="font-serif text-2xl tracking-tight">
-            Gorgias-style modeled estimate
+          <h2
+            id="modeled-estimate"
+            className="font-serif text-2xl tracking-tight"
+          >
+            Gorgias-style modeled baseline
           </h2>
           <p className="mt-2 max-w-2xl text-xs leading-6 text-muted">
-            A modeled cost estimator based on public pricing/overage mechanics:
-            ticket allowance, per-ticket overage, AI per-resolution fee and
-            seat cost. Every figure below is an assumption you can inspect and
-            change.
+            {PRICING_LABEL}. Auto mode selects the cheapest eligible Helpdesk
+            tier; AI resolutions are charged on top of ticket overages.
           </p>
 
-          <dl className="mt-7 grid gap-x-10 gap-y-3 sm:grid-cols-2">
+          <div className="mt-6 border-t border-line pt-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-muted">
+              Selected Helpdesk tier
+            </p>
+            <p className="mt-1 font-serif text-xl">
+              {model.gorgias.tier.label}
+              {model.gorgias.autoSelected ? (
+                <span className="ml-2 text-xs uppercase tracking-[0.12em] text-muted">
+                  auto-selected
+                </span>
+              ) : null}
+            </p>
+          </div>
+
+          <dl className="mt-6 grid gap-x-10 gap-y-3 sm:grid-cols-2">
+            <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
+              <dt className="text-muted">Helpdesk base / mo</dt>
+              <dd className="font-mono">{moneyPrecise(model.gorgias.rate)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
+              <dt className="text-muted">Included tickets</dt>
+              <dd className="font-mono">
+                {count(model.gorgias.includedTickets)}
+              </dd>
+            </div>
             <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
               <dt className="text-muted">AI-resolved tickets</dt>
               <dd className="font-mono">{count(model.aiResolutions)}</dd>
@@ -439,48 +365,65 @@ export default function GorgiasCostCalculator() {
             </div>
             <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
               <dt className="text-muted">Overage tickets</dt>
-              <dd className="font-mono">{count(model.overageTickets)}</dd>
+              <dd className="font-mono">
+                {count(model.gorgias.overageTickets)}
+              </dd>
             </div>
             <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
               <dt className="text-muted">Ticket overage charge</dt>
-              <dd className="font-mono">{moneyPrecise(model.ticketOverage)}</dd>
+              <dd className="font-mono">
+                {moneyPrecise(model.gorgias.ticketOverage)}
+              </dd>
             </div>
             <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
               <dt className="text-muted">AI resolution charge</dt>
-              <dd className="font-mono">{moneyPrecise(model.aiCharges)}</dd>
+              <dd className="font-mono">
+                {moneyPrecise(model.gorgias.aiCharges)}
+              </dd>
             </div>
             <div className="flex justify-between gap-4 border-b border-line pb-2 text-sm">
-              <dt className="text-muted">Seat charge</dt>
-              <dd className="font-mono">{moneyPrecise(model.seatCharges)}</dd>
+              <dt className="text-muted">Gorgias seat charge</dt>
+              <dd className="font-mono">{money(0)}</dd>
             </div>
           </dl>
           <p className="mt-4 text-xs leading-5 text-muted">
-            The ticket allowance is applied to total tickets in this model,
-            including AI-resolved ones, so overage and AI charges can stack.
+            Helpdesk tiers include seats; no separate Gorgias seat fee is added
+            here.
           </p>
 
-          <div className="mt-7 flex flex-wrap items-baseline justify-between gap-4 border-t border-line pt-6">
+          <div className="mt-7 grid gap-4 border-t border-line pt-6 sm:grid-cols-3">
             <div>
               <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                Modeled monthly
+                Effective monthly — monthly plan
               </p>
-              <p className="mt-1 font-serif text-3xl">
-                {money(model.gorgiasMonthly)}
+              <p className="mt-1 font-serif text-2xl">
+                {money(monthlyModel.gorgias.monthly)}
               </p>
             </div>
-            <div className="text-right">
+            <div>
               <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                Annualized (12× monthly)
+                Effective monthly — annual plan
+              </p>
+              <p className="mt-1 font-serif text-2xl">
+                {money(annualModel.gorgias.monthly)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                Annualized 12-month ({cycleLabel})
               </p>
               <p className="mt-1 font-mono text-lg">
-                {money(model.gorgiasAnnual)}
+                {money(currentAnnualized)}
               </p>
             </div>
           </div>
         </section>
       </div>
 
-      <section className="mt-16 border-t border-line pt-10" aria-labelledby="comparison">
+      <section
+        className="mt-16 border-t border-line pt-10"
+        aria-labelledby="comparison"
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2
             id="comparison"
@@ -488,15 +431,14 @@ export default function GorgiasCostCalculator() {
           >
             Side-by-side comparison
           </h2>
-          <p className="text-xs text-muted">
-            Verify live pricing on vendor site before deciding.
-          </p>
+          <p className="text-xs text-muted">{PRICING_LABEL}</p>
         </div>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-muted">
-          Each card applies the same ticket, AI and seat formula using its own
-          illustrative base fee, allowance and per-ticket rate. Delta compares
-          with the Gorgias-style modeled estimate above. None of these figures
-          are vendor quotes.
+          Each card uses its own published billing structure. Text and HelpDesk
+          share unified Text pricing; LiveChat covers human chat seats only,
+          with AI add-ons billed separately. Every figure is a modeled estimate
+          based on public November 2026 pricing — verify live pricing on vendor
+          site.
         </p>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -505,7 +447,7 @@ export default function GorgiasCostCalculator() {
             const pending =
               !affiliateLinks[card.key].href.trim() ||
               href === AFFILIATE_FALLBACK_HREF;
-            const delta = card.deltaMonthly;
+            const delta = (inputs.billing === "annual" ? card.annual : card.monthly) - currentMonthly;
 
             return (
               <article
@@ -521,32 +463,34 @@ export default function GorgiasCostCalculator() {
 
                 <dl className="mt-5 space-y-2 text-sm">
                   <div className="flex justify-between gap-4">
-                    <dt className="text-muted">Estimated monthly</dt>
+                    <dt className="text-muted">Effective monthly (monthly plan)</dt>
                     <dd className="font-mono">{money(card.monthly)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-muted">
-                      Estimated {cycleLabel} cost
-                    </dt>
-                    <dd className="font-mono">{money(card.periodTotal)}</dd>
+                    <dt className="text-muted">Effective monthly (annual plan)</dt>
+                    <dd className="font-mono">{money(card.annual)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-muted">Delta vs modeled</dt>
+                    <dt className="text-muted">Annualized 12-month ({cycleLabel})</dt>
+                    <dd className="font-mono">
+                      {money(
+                        (inputs.billing === "annual" ? card.annual : card.monthly) *
+                          MONTHS_PER_YEAR,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted">Delta vs Gorgias ({cycleLabel})</dt>
                     <dd className="font-mono">
                       {delta === 0
                         ? "Same"
-                        : `${delta > 0 ? "+" : "−"}${money(Math.abs(delta))} / ${cycleLabel}`}
+                        : `${delta > 0 ? "+" : "−"}${money(Math.abs(delta))}`}
                     </dd>
                   </div>
                 </dl>
 
                 <p className="mt-4 text-xs leading-6 text-muted">
-                  Assumed base {money(card.monthlyBase)} ·{" "}
-                  {count(card.includedTickets)} included tickets · overage{" "}
-                  {moneyPrecise(card.overagePerTicket)}/ticket · AI{" "}
-                  {card.aiFeePerResolution === null
-                    ? "not modelled"
-                    : `${moneyPrecise(card.aiFeePerResolution)}/resolution`}.
+                  {card.detail}
                 </p>
 
                 <div className="mt-auto border-t border-line pt-5">
