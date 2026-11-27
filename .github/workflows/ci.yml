@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**", "refactor/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Avoid wasting build minutes on superseded runs of the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, test, drift dry-run and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: ./node_modules/.bin/tsc --noEmit --incremental false -p tsconfig.json
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Pricing drift dry-run (structure & URLs only, no network)
+        run: node scripts/check-pricing-drift.mjs --dry-run
+
+      - name: Production build
+        run: npm run build

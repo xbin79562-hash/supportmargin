@@ -10,7 +10,9 @@
     "test:pricing": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/pricing-engine.test.mjs",
     "test:blog": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/blog.test.mjs",
     "test:api": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/estimate-api.test.mjs",
-    "test": "npm run test:pricing && npm run test:blog && npm run test:api",
+    "test:content-guard": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/content-guard.test.mjs",
+    "test:pricing-drift": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/pricing-drift.test.mjs",
+    "test": "npm run test:pricing && npm run test:blog && npm run test:api && npm run test:content-guard && npm run test:pricing-drift",
     "check:pricing-drift": "node scripts/check-pricing-drift.mjs"
   },
   "dependencies": {

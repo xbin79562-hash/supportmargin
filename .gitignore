@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# local automation reports (pricing-drift workflow writes tmp/)
+/tmp/
+
 # next.js
 /.next/
 /out/

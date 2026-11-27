@@ -1,0 +1,201 @@
+name: Pricing Drift Watch
+
+on:
+  # UTC 02:00 every Monday == 10:00 Monday (Asia/Shanghai, UTC+8).
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: validate locally without live vendor requests (never creates an issue)"
+        type: boolean
+        required: false
+        default: false
+      create_issue_on_failure:
+        description: "Also alert when vendor pages could not be fetched (failed checks)"
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-check:
+    name: Weekly vendor pricing drift check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run pricing drift check
+        id: drift
+        shell: bash
+        run: |
+          mkdir -p tmp
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "DRY_RUN requested: skipping live vendor requests."
+            node scripts/check-pricing-drift.mjs --dry-run \
+              --report-json tmp/pricing-drift-report.json \
+              --report-md tmp/pricing-drift-report.md
+          else
+            echo "Live vendor pricing check."
+            node scripts/check-pricing-drift.mjs \
+              --report-json tmp/pricing-drift-report.json \
+              --report-md tmp/pricing-drift-report.md
+          fi
+
+      - name: Append Markdown report to job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f tmp/pricing-drift-report.md ]; then
+            cat tmp/pricing-drift-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No pricing drift report was generated in this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricing-drift-report
+          path: tmp/pricing-drift-report.*
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Create or update pricing drift issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const jsonPath = 'tmp/pricing-drift-report.json';
+            const mdPath = 'tmp/pricing-drift-report.md';
+
+            if (!fs.existsSync(jsonPath)) {
+              core.warning('No JSON report found; skipping issue sync.');
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+            const markdown = fs.existsSync(mdPath)
+              ? fs.readFileSync(mdPath, 'utf8')
+              : '(Markdown report unavailable for this run.)';
+
+            const rawDry = context.payload.inputs?.dry_run;
+            const dryRun =
+              report.mode === 'dry-run' || rawDry === true || rawDry === 'true';
+            const rawCreate = context.payload.inputs?.create_issue_on_failure;
+            const createIssueOnFailure =
+              rawCreate === undefined || rawCreate === ''
+                ? true
+                : rawCreate === true || rawCreate === 'true';
+
+            const drifted = Array.isArray(report.drifted) ? report.drifted : [];
+            const failed = Array.isArray(report.failed) ? report.failed : [];
+            const needsIssue =
+              drifted.length > 0 || (createIssueOnFailure && failed.length > 0);
+
+            // Dry runs and clean runs never open or touch an issue.
+            if (dryRun) {
+              core.info('Dry run: issue creation/comment is disabled.');
+              return;
+            }
+            if (!needsIssue) {
+              core.info(
+                `No issue needed: drifted=${drifted.length}, failed=${failed.length}, ` +
+                `unchanged=${report.counts?.unchanged ?? 0}.`
+              );
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const label = 'pricing-drift';
+
+            // Ensure the label exists before searching/creating issues.
+            try {
+              await github.rest.issues.getLabel({ ...context.repo, name: label });
+            } catch (error) {
+              if (error.status === 404) {
+                await github.rest.issues.createLabel({
+                  ...context.repo,
+                  name: label,
+                  color: 'B60205',
+                  description: 'Automated vendor pricing drift alert',
+                });
+                core.info(`Created missing label ${label}.`);
+              } else {
+                throw error;
+              }
+            }
+
+            // De-duplication: reuse the first open issue carrying the label.
+            const candidates = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const openIssues = candidates.filter((issue) => !issue.pull_request);
+
+            const utcDate = new Date().toISOString().slice(0, 10);
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const onlyFailures = drifted.length === 0 && failed.length > 0;
+            const title = onlyFailures
+              ? `[Pricing Check Warning] Vendor pages could not be verified (${utcDate})`
+              : `[Pricing Drift] Detected vendor pricing changes (${utcDate})`;
+
+            if (openIssues.length > 0) {
+              const issue = openIssues[0];
+              const body = [
+                `### Pricing drift re-check — ${utcDate} (UTC)`,
+                '',
+                `Workflow run: ${runUrl}`,
+                `drifted=${drifted.length}, failed=${failed.length}, ` +
+                  `unchanged=${report.counts?.unchanged ?? 0}`,
+                '',
+                '<details><summary>Full report</summary>',
+                '',
+                markdown,
+                '',
+                '</details>',
+              ].join('\n');
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body,
+              });
+              core.info(`Appended a comment to existing issue #${issue.number}.`);
+            } else {
+              const body = [
+                `Automated vendor pricing check detected **${drifted.length} drifted** ` +
+                  `and **${failed.length} failed** vendor page(s).`,
+                '',
+                `Workflow run: ${runUrl}`,
+                `Catalog verifiedAt: ${report.catalogVerifiedAt ?? 'unknown'}`,
+                '',
+                markdown,
+              ].join('\n');
+              const created = await github.rest.issues.create({
+                ...context.repo,
+                title,
+                body,
+                labels: [label],
+              });
+              core.info(`Created issue #${created.data.number}: ${title}`);
+            }
