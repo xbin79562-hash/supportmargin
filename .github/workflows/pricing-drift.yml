@@ -16,13 +16,21 @@ on:
         type: boolean
         required: false
         default: true
+      update_baseline:
+        description: "Run --update-baseline on GitHub runner and open a PR updating scripts/pricing-drift-baseline.json"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# contents: write is required only to push the baseline branch; cron and regular
+# dispatch runs never reach that step, but permissions are workflow-wide.
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   issues: write
 
 jobs:
@@ -42,8 +50,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ------------------------------------------------------------------
+      # Regular path: weekly cron + normal workflow_dispatch (read-only).
+      # It is mutually exclusive with the manual baseline-update mode, so a
+      # scheduled run can never write scripts/pricing-drift-baseline.json.
+      # ------------------------------------------------------------------
       - name: Run pricing drift check
         id: drift
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_baseline != true }}
         shell: bash
         run: |
           mkdir -p tmp
@@ -60,7 +74,7 @@ jobs:
           fi
 
       - name: Append Markdown report to job summary
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.update_baseline != true) }}
         shell: bash
         run: |
           if [ -f tmp/pricing-drift-report.md ]; then
@@ -70,7 +84,7 @@ jobs:
           fi
 
       - name: Upload report artifact
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.update_baseline != true) }}
         uses: actions/upload-artifact@v4
         with:
           name: pricing-drift-report
@@ -79,7 +93,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Create or update pricing drift issue
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.update_baseline != true) }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -198,4 +212,152 @@ jobs:
                 labels: [label],
               });
               core.info(`Created issue #${created.data.number}: ${title}`);
+            }
+
+      # ------------------------------------------------------------------
+      # Manual cloud-only path: refresh the baseline on a GitHub-hosted runner
+      # (no local proxy), force-push a fixed branch, open/reuse a PR to main.
+      # ONLY reachable via workflow_dispatch with update_baseline=true.
+      # ------------------------------------------------------------------
+      - name: Update pricing drift baseline on GitHub runner
+        id: baseline
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baseline == true }}
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p tmp
+          echo "Mode: manual baseline update on a GitHub-hosted runner (no local proxy)."
+          node scripts/check-pricing-drift.mjs --update-baseline 2>&1 | tee tmp/baseline-run.log
+          drift_exit="${PIPESTATUS[0]}"
+          echo "drift_exit=${drift_exit}" >> "$GITHUB_OUTPUT"
+          echo "::notice::check-pricing-drift.mjs exited ${drift_exit}; a non-zero code usually means some vendor pages were unreachable, but every successfully captured snapshot is still written."
+
+          if git diff --quiet scripts/pricing-drift-baseline.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Baseline update"
+              echo ""
+              echo "No changes in \`scripts/pricing-drift-baseline.json\` — skipping branch push and PR creation."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "Baseline unchanged; nothing to commit."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "### Vendor pricing baseline change summary"
+            echo ""
+            echo "- Workflow run: ${run_url}"
+            echo "- Trigger: workflow_dispatch with \`update_baseline=true\` (GitHub-hosted runner, no local proxy)"
+            echo "- check-pricing-drift.mjs exit code: \`${drift_exit}\`"
+            echo ""
+            echo '```diff'
+            git diff -- scripts/pricing-drift-baseline.json
+            echo '```'
+            echo ""
+            echo "### Check log"
+            echo ""
+            echo '```text'
+            grep -E '^(\[STABLE\]|\[CHANGED\]|\[FETCH_FAILED\]|\[BASELINE_UNSET\]|SUMMARY:|Baseline updated:)' tmp/baseline-run.log || true
+            echo '```'
+          } > tmp/baseline-change-summary.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B chore/update-pricing-baseline
+          git add scripts/pricing-drift-baseline.json
+          git commit -m "chore: update vendor pricing drift baseline"
+          git push --force origin chore/update-pricing-baseline
+          echo "Force-pushed updated baseline to chore/update-pricing-baseline."
+
+      - name: Create or reuse baseline update PR
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baseline == true && steps.baseline.outputs.changed == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const head = 'chore/update-pricing-baseline';
+            const base = 'main';
+            const title = 'chore: update vendor pricing drift baseline';
+            const summaryPath = 'tmp/baseline-change-summary.md';
+            const summary = fs.existsSync(summaryPath)
+              ? fs.readFileSync(summaryPath, 'utf8')
+              : '_(change summary unavailable for this run)_';
+            const compareUrl = `${context.serverUrl}/${owner}/${repo}/compare/${base}...${head}?expand=1`;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            function appendSummary(text) {
+              const target = process.env.GITHUB_STEP_SUMMARY;
+              if (target) fs.appendFileSync(target, `\n${text}\n`);
+            }
+
+            // Reuse an existing open PR targeting main from the fixed branch.
+            const existing = await github.paginate(github.rest.pulls.list, {
+              ...context.repo,
+              state: 'open',
+              head: `${owner}:${head}`,
+              base,
+              per_page: 100,
+            });
+
+            if (existing.length > 0) {
+              const pr = existing[0];
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pr.number,
+                body: [
+                  `### Baseline refreshed — ${new Date().toISOString().slice(0, 10)} (UTC)`,
+                  '',
+                  `Workflow run: ${runUrl}`,
+                  '',
+                  summary,
+                ].join('\n'),
+              });
+              core.info(`Reused existing PR #${pr.number}: ${pr.html_url}`);
+              appendSummary(`## Baseline PR reused\n\nExisting PR #${pr.number}: ${pr.html_url}`);
+              return;
+            }
+
+            const body = [
+              'Automated vendor pricing baseline refresh, produced on a GitHub-hosted runner (no local proxy).',
+              '',
+              `Workflow run: ${runUrl}`,
+              '',
+              summary,
+              '',
+              '> Verify each vendor pricing page before merging. This PR only updates `scripts/pricing-drift-baseline.json`.',
+            ].join('\n');
+
+            try {
+              const created = await github.rest.pulls.create({
+                ...context.repo,
+                head,
+                base,
+                title,
+                body,
+              });
+              core.info(`Created PR #${created.data.number}: ${created.data.html_url}`);
+              appendSummary(`## Baseline PR created\n\nPR #${created.data.number}: ${created.data.html_url}`);
+            } catch (error) {
+              // 403 == repo setting "Allow GitHub Actions to create and approve
+              // pull requests" is disabled. Never fail the whole job: the branch
+              // was already pushed, so give a one-click manual compare link.
+              if (error.status !== 403) throw error;
+              core.warning('pulls.create returned 403 — GitHub Actions PR creation is disabled for this repository.');
+              appendSummary([
+                '## Action required: create the baseline PR manually',
+                '',
+                'PR creation returned **403**: this repository has *"Allow GitHub Actions to create and approve pull requests"* disabled.',
+                '',
+                `The updated baseline was still force-pushed to \`${head}\`.`,
+                '',
+                'Enable the setting under **Settings → Actions → General → Workflow permissions** and re-run this workflow, or open the PR manually:',
+                '',
+                `[Open compare / create PR manually](${compareUrl})`,
+                '',
+                `Compare URL: ${compareUrl}`,
+              ].join('\n'));
+              core.info(`Manual PR compare link: ${compareUrl}`);
             }

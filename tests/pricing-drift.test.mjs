@@ -256,7 +256,8 @@ test("pricing-drift.yml declares cron, least privilege, artifact and Issue dedup
     "workflow_dispatch:",
     "dry_run:",
     "create_issue_on_failure:",
-    "contents: read",
+    "contents: write",
+    "pull-requests: write",
     "issues: write",
     "runs-on: ubuntu-latest",
     'node-version: "22"',
@@ -288,4 +289,52 @@ test("pricing-drift.yml declares cron, least privilege, artifact and Issue dedup
     wf.indexOf("listForRepo") < wf.indexOf("openIssues.length > 0"),
     "pricing-drift.yml dedup lookup/branch order is broken",
   );
+});
+
+test("pricing-drift.yml gates the manual update_baseline PR mode behind workflow_dispatch", () => {
+  const wf = readProjectFile(".github/workflows/pricing-drift.yml");
+  const ci = readProjectFile(".github/workflows/ci.yml");
+  const gate =
+    "github.event_name == 'workflow_dispatch' && inputs.update_baseline == true";
+
+  for (const needle of [
+    "update_baseline:",
+    "Run --update-baseline on GitHub runner and open a PR updating scripts/pricing-drift-baseline.json",
+    "default: false",
+    "node scripts/check-pricing-drift.mjs --update-baseline",
+    "git diff --quiet scripts/pricing-drift-baseline.json",
+    "git checkout -B chore/update-pricing-baseline",
+    "git push --force origin chore/update-pricing-baseline",
+    "github-actions[bot]",
+    gate,
+    "steps.baseline.outputs.changed == 'true'",
+    "chore: update vendor pricing drift baseline",
+    "pulls.list",
+    "pulls.create",
+    "error.status !== 403",
+    "GITHUB_STEP_SUMMARY",
+    "compare/${base}...${head}",
+    "Allow GitHub Actions to create and approve pull requests",
+  ]) {
+    assert.ok(wf.includes(needle), `pricing-drift.yml missing baseline-PR field: ${needle}`);
+  }
+
+  // A scheduled cron run can never reach the baseline-writing step.
+  assert.ok(wf.includes('cron: "0 2 * * 1"'));
+  assert.ok(
+    wf.indexOf(gate) <
+      wf.indexOf("node scripts/check-pricing-drift.mjs --update-baseline"),
+    "baseline update step must be guarded by workflow_dispatch + update_baseline",
+  );
+  assert.ok(
+    wf.indexOf("git diff --quiet scripts/pricing-drift-baseline.json") <
+      wf.indexOf("git push --force origin chore/update-pricing-baseline"),
+    "changed-check must run before the force push",
+  );
+
+  // ci.yml stays read-only and does not gain the baseline-write mode.
+  assert.ok(ci.includes("contents: read"));
+  assert.ok(!ci.includes("contents: write"));
+  assert.ok(!ci.includes("update_baseline"));
+  assert.ok(!ci.includes("pull-requests: write"));
 });
