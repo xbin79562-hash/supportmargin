@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:pricing": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/pricing-engine.test.mjs",
     "test:blog": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/blog.test.mjs",
-    "test": "npm run test:pricing && npm run test:blog",
+    "test:api": "node --experimental-strip-types --no-warnings=MODULE_TYPELESS_PACKAGE_JSON --test tests/estimate-api.test.mjs",
+    "test": "npm run test:pricing && npm run test:blog && npm run test:api",
     "check:pricing-drift": "node scripts/check-pricing-drift.mjs"
   },
   "dependencies": {

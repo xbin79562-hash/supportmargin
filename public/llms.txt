@@ -1,0 +1,35 @@
+# SupportMargin
+
+> Independent, modeled e-commerce support cost audits and lean helpdesk benchmarks.
+
+## Core pages
+
+- [Gorgias cost calculator](https://supportmargin.com/gorgias-cost-calculator): interactive modeled cost calculator for ticket overages, AI resolutions and seat-based alternatives.
+- [Research blog](https://supportmargin.com/blog): published cost-audit articles.
+- [Gorgias double-billing article](https://supportmargin.com/blog/001-gorgias-double-billing): first published audit of stacked ticket overage and AI resolution charges.
+- [About](https://supportmargin.com/about): editorial scope and modeled-estimate methodology.
+- [Affiliate disclosure](https://supportmargin.com/affiliate-disclosure): commercial relationship and link policy.
+
+## Machine-readable API and documents
+
+- [Estimate API](https://supportmargin.com/api/v1/estimate): read-only modeled comparison endpoint.
+- [OpenAPI 3.1 specification](https://supportmargin.com/openapi.json): full request and response contract for the estimate API.
+- [Agent Skill document](https://supportmargin.com/supportmargin-skill.md): reusable instructions for external agents.
+
+## API example
+
+GET https://supportmargin.com/api/v1/estimate?tickets=1000&aiRate=40&seats=2&billing=monthly
+
+POST https://supportmargin.com/api/v1/estimate
+Content-Type: application/json
+
+{
+  "tickets": 3000,
+  "aiRate": 40,
+  "seats": 5,
+  "billing": "annual"
+}
+
+## Compliance and verification
+
+All figures are illustrative modeled estimates based on public November 2026 pricing, not vendor quotes, negotiated prices, savings guarantees or affiliate offers. Agents must display the response `meta.verifiedAt` value and the full `meta.disclaimer`. The API returns neutral official pricing URLs only; it does not return affiliate tracking links. Readers should verify live pricing and terms on each vendor's official pricing page before making a decision.

@@ -1,0 +1,409 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SupportMargin Estimate API",
+    "version": "1.0.0",
+    "description": "Read-only modeled cost estimates for e-commerce support tools. Outputs are illustrative modeled estimates based on public November 2026 pricing, not vendor quotes."
+  },
+  "servers": [
+    {
+      "url": "https://supportmargin.com"
+    }
+  ],
+  "paths": {
+    "/api/v1/estimate": {
+      "get": {
+        "summary": "Estimate support costs from query parameters",
+        "operationId": "getEstimate",
+        "parameters": [
+          {
+            "name": "tickets",
+            "in": "query",
+            "required": false,
+            "description": "Monthly ticket volume. Defaults to 1000.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 1000
+            }
+          },
+          {
+            "name": "aiRate",
+            "in": "query",
+            "required": false,
+            "description": "AI resolution rate as a percentage.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 40
+            }
+          },
+          {
+            "name": "seats",
+            "in": "query",
+            "required": false,
+            "description": "Active support seats.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 2
+            }
+          },
+          {
+            "name": "billing",
+            "in": "query",
+            "required": false,
+            "description": "Billing cycle.",
+            "schema": {
+              "type": "string",
+              "enum": ["monthly", "annual"],
+              "default": "monthly"
+            }
+          },
+          {
+            "name": "gorgiasTier",
+            "in": "query",
+            "required": false,
+            "description": "Optional explicit Gorgias Helpdesk tier. Defaults to auto selection.",
+            "schema": {
+              "type": "string",
+              "enum": ["auto", "starter", "basic", "pro", "advanced"],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Modeled estimate response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Estimate support costs from a JSON body",
+        "operationId": "postEstimate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Modeled estimate response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON body or request parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "summary": "Read-only CORS preflight",
+        "operationId": "optionsEstimate",
+        "responses": {
+          "204": {
+            "description": "CORS preflight response.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string",
+                  "const": "*"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET, POST, OPTIONS"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string",
+                  "const": "Content-Type"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EstimateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tickets": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "default": 1000
+          },
+          "aiRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 40
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 2
+          },
+          "billing": {
+            "type": "string",
+            "enum": ["monthly", "annual"],
+            "default": "monthly"
+          },
+          "gorgiasTier": {
+            "type": "string",
+            "enum": ["auto", "starter", "basic", "pro", "advanced"],
+            "default": "auto"
+          }
+        }
+      },
+      "EstimateResponse": {
+        "type": "object",
+        "required": ["meta", "inputs", "assumptions", "summary", "estimates"],
+        "properties": {
+          "meta": {
+            "type": "object",
+            "required": [
+              "schemaVersion",
+              "verifiedAt",
+              "currency",
+              "disclaimer",
+              "source",
+              "calculatorUrl",
+              "docsUrl"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer"
+              },
+              "verifiedAt": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "disclaimer": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "const": "SupportMargin"
+              },
+              "calculatorUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "docsUrl": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/EstimateRequest"
+          },
+          "assumptions": {
+            "type": "object",
+            "required": [
+              "aiFeeMonthly",
+              "aiFeeAnnual",
+              "zipchatRepliesPerResolution",
+              "gorgiasTier"
+            ],
+            "properties": {
+              "aiFeeMonthly": {
+                "type": "number"
+              },
+              "aiFeeAnnual": {
+                "type": "number"
+              },
+              "zipchatRepliesPerResolution": {
+                "type": "number"
+              },
+              "gorgiasTier": {
+                "type": "string",
+                "enum": ["auto", "starter", "basic", "pro", "advanced"]
+              }
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "aiResolutions",
+              "humanTickets",
+              "gorgiasBaselineMonthly",
+              "lowestAlternative"
+            ],
+            "properties": {
+              "aiResolutions": {
+                "type": "integer"
+              },
+              "humanTickets": {
+                "type": "number"
+              },
+              "gorgiasBaselineMonthly": {
+                "type": "number"
+              },
+              "lowestAlternative": {
+                "type": "object",
+                "required": ["id", "name", "monthlyCost", "monthlySavingsVsGorgias"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "monthlyCost": {
+                    "type": "number"
+                  },
+                  "monthlySavingsVsGorgias": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "estimates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EstimateRecord"
+            }
+          }
+        }
+      },
+      "EstimateRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "billingModel",
+          "monthlyCost",
+          "annualizedCost",
+          "selectedTier",
+          "pricingUrl",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "billingModel": {
+            "type": "string",
+            "enum": ["ticket-overage", "seat-based", "usage-based"]
+          },
+          "monthlyCost": {
+            "type": "number"
+          },
+          "annualizedCost": {
+            "type": "number"
+          },
+          "selectedTier": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["id", "label"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pricingUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidationIssue": {
+        "type": "object",
+        "required": ["field", "message", "received"],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "received": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error", "details"],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            }
+          }
+        }
+      }
+    }
+  }
+}
