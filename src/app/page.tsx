@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -6,6 +7,30 @@ import {
   getAffiliateUrl,
   type AffiliateKey,
 } from "@/config/affiliates";
+import { getAllPosts } from "@/lib/blog";
+
+export const metadata: Metadata = {
+  title: "Independent e-commerce support research",
+  description:
+    "SupportMargin documents e-commerce support costs, ticket and AI pricing mechanics, and lean helpdesk alternatives.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: "SupportMargin — Independent e-commerce support research",
+    description:
+      "E-commerce support costs, examined in the open with modeled benchmarks and lean helpdesk notes.",
+    siteName: "SupportMargin",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SupportMargin — Independent e-commerce support research",
+    description: "E-commerce support costs, examined in the open.",
+  },
+};
 
 const pageSections = [
   { id: "scope", number: "01", label: "Scope" },
@@ -142,6 +167,8 @@ function VendorLink({
 }
 
 export default function Home() {
+  const firstPost = getAllPosts()[0];
+
   return (
     <>
       <section className="border-b border-line py-16 sm:py-24">
@@ -203,6 +230,22 @@ export default function Home() {
               <p className="mt-1 text-xs leading-5 text-muted">
                 Model ticket overages and AI per-resolution charges.
               </p>
+            </div>
+            <div className="mt-6 border-t border-line pt-5">
+              <Link
+                href="/blog"
+                className="text-sm font-medium text-accent underline decoration-line underline-offset-4 hover:decoration-accent"
+              >
+                Read the research blog →
+              </Link>
+              {firstPost ? (
+                <Link
+                  href={`/blog/${firstPost.slug}`}
+                  className="mt-2 block text-xs leading-5 text-muted underline decoration-line underline-offset-4 hover:text-ink"
+                >
+                  {firstPost.title}
+                </Link>
+              ) : null}
             </div>
           </aside>
         </div>

@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11",
+  "currency": "USD",
+  "pricingLabel": "modeled estimates based on public November 2026 pricing — verify live pricing on vendor site",
+  "monthsPerYear": 12,
+  "defaults": {
+    "inputs": {
+      "tickets": 1000,
+      "aiRate": 40,
+      "seats": 2,
+      "billing": "monthly"
+    },
+    "assumptions": {
+      "aiFeeMonthly": 1,
+      "aiFeeAnnual": 0.9,
+      "zipchatRepliesPerResolution": 2.5,
+      "gorgiasTier": "auto"
+    }
+  },
+  "normalization": {
+    "tickets": {
+      "min": 0
+    },
+    "aiRate": {
+      "min": 0,
+      "max": 100
+    },
+    "seats": {
+      "min": 1
+    }
+  },
+  "uiBounds": {
+    "tickets": {
+      "min": 100,
+      "max": 5000,
+      "step": 50
+    },
+    "aiRate": {
+      "min": 0,
+      "max": 80,
+      "step": 1
+    },
+    "seats": {
+      "min": 1,
+      "max": 10,
+      "step": 1
+    },
+    "aiFee": {
+      "min": 0,
+      "max": 3,
+      "step": 0.05
+    },
+    "zipchatReplies": {
+      "min": 0,
+      "step": 0.1
+    }
+  },
+  "products": {
+    "gorgias": {
+      "id": "gorgias",
+      "name": "Gorgias-style modeled baseline",
+      "billingModel": "ticket-overage",
+      "pricingUrl": "https://www.gorgias.com/pricing",
+      "affiliateKey": null,
+      "notes": "Helpdesk tiers include seats; AI Agent resolutions are modeled as an additional per-resolution charge. No separate Gorgias seat fee is added.",
+      "tiers": [
+        {
+          "id": "starter",
+          "label": "Starter",
+          "monthlyRate": 10,
+          "annualRate": 10,
+          "includedTickets": 50,
+          "overagePerTicket": 0.4,
+          "maxSeats": 3,
+          "monthlyOnly": true
+        },
+        {
+          "id": "basic",
+          "label": "Basic",
+          "monthlyRate": 60,
+          "annualRate": 50,
+          "includedTickets": 300,
+          "overagePerTicket": 0.4
+        },
+        {
+          "id": "pro",
+          "label": "Pro",
+          "monthlyRate": 360,
+          "annualRate": 300,
+          "includedTickets": 2000,
+          "overagePerTicket": 0.36
+        },
+        {
+          "id": "advanced",
+          "label": "Advanced",
+          "monthlyRate": 900,
+          "annualRate": 750,
+          "includedTickets": 5000,
+          "overagePerTicket": 0.36
+        }
+      ]
+    },
+    "smartsupp": {
+      "id": "smartsupp",
+      "name": "Smartsupp",
+      "billingModel": "seat-based",
+      "pricingUrl": "https://www.smartsupp.com/pricing/",
+      "affiliateKey": "smartsupp",
+      "notes": "Tiered seat plan with unlimited human chats, plus optional Mira AI packs of 100 AI chats.",
+      "seatPlans": {
+        "solo": {
+          "label": "Solo",
+          "maxSeats": 1,
+          "monthlyRate": 24,
+          "annualRate": 17
+        },
+        "plus": {
+          "label": "Plus",
+          "maxSeats": 3,
+          "monthlyRate": 35,
+          "annualRate": 25
+        },
+        "expert": {
+          "label": "Expert",
+          "maxSeats": 5,
+          "monthlyRate": 117,
+          "annualRate": 83,
+          "extraSeatMonthlyRate": 34,
+          "extraSeatAnnualRate": 24
+        }
+      },
+      "aiPacks": {
+        "label": "Mira AI pack",
+        "size": 100,
+        "monthlyRate": 20,
+        "annualRate": 16
+      }
+    },
+    "text": {
+      "id": "text",
+      "name": "Text",
+      "billingModel": "seat-based",
+      "pricingUrl": "https://www.text.com/pricing/",
+      "affiliateKey": "text",
+      "notes": "Per-seat pricing with unlimited tickets and AI resolution packs. The model auto-selects the cheaper of Essential or Growth.",
+      "plans": {
+        "essential": {
+          "label": "Essential",
+          "monthlySeatRate": 25,
+          "annualSeatRate": 19,
+          "includedAiResolutions": 10
+        },
+        "growth": {
+          "label": "Growth",
+          "monthlySeatRate": 99,
+          "annualSeatRate": 79,
+          "includedAiResolutions": 200
+        }
+      },
+      "aiPacks": {
+        "size": 50,
+        "rate": 49.5
+      },
+      "ticketAllowance": "unlimited"
+    },
+    "helpdesk": {
+      "id": "helpdesk",
+      "name": "HelpDesk",
+      "billingModel": "seat-based",
+      "pricingUrl": "https://www.helpdesk.com/pricing/",
+      "affiliateKey": "helpdesk",
+      "notes": "HelpDesk shares Text's unified pricing; it reuses the text product record in this catalog.",
+      "reusesPricingFrom": "text"
+    },
+    "livechat": {
+      "id": "livechat",
+      "name": "LiveChat",
+      "billingModel": "seat-based",
+      "pricingUrl": "https://www.livechat.com/pricing/",
+      "affiliateKey": "livechat",
+      "notes": "Human chat seats only; AI automation is not bundled and any AI add-on is billed separately.",
+      "plans": {
+        "starter": {
+          "label": "Starter",
+          "maxSeats": 1,
+          "monthlySeatRate": 25,
+          "annualSeatRate": 19
+        },
+        "team": {
+          "label": "Team",
+          "minSeats": 2,
+          "monthlySeatRate": 59,
+          "annualSeatRate": 49
+        }
+      }
+    },
+    "zipchat": {
+      "id": "zipchat",
+      "name": "Zipchat AI",
+      "billingModel": "usage-based",
+      "pricingUrl": "https://zipchat.ai/pricing",
+      "affiliateKey": "zipchat",
+      "notes": "Tiered AI reply pricing. The model assumes roughly 2.5 AI replies per AI-resolved conversation; the assumption is editable in the calculator.",
+      "replyTiers": [
+        {
+          "label": "Starter",
+          "includedReplies": 750,
+          "monthlyRate": 80,
+          "annualRate": 64
+        },
+        {
+          "label": "Pro",
+          "includedReplies": 3000,
+          "monthlyRate": 300,
+          "annualRate": 240
+        },
+        {
+          "label": "Scale",
+          "includedReplies": 6000,
+          "monthlyRate": 600,
+          "annualRate": 480
+        }
+      ],
+      "defaultRepliesPerResolution": 2.5
+    }
+  }
+}

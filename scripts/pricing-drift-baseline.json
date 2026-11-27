@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": null,
+  "products": {
+    "gorgias": {
+      "pricingUrl": "https://www.gorgias.com/pricing",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    },
+    "smartsupp": {
+      "pricingUrl": "https://www.smartsupp.com/pricing/",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    },
+    "text": {
+      "pricingUrl": "https://www.text.com/pricing/",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    },
+    "helpdesk": {
+      "pricingUrl": "https://www.helpdesk.com/pricing/",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    },
+    "livechat": {
+      "pricingUrl": "https://www.livechat.com/pricing/",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    },
+    "zipchat": {
+      "pricingUrl": "https://zipchat.ai/pricing",
+      "checkedAt": null,
+      "summaryHash": null,
+      "visiblePrices": []
+    }
+  }
+}

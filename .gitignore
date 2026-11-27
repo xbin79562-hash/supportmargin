@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# local automation reports (pricing-drift workflow writes tmp/)
+/tmp/
+
 # next.js
 /.next/
 /out/
@@ -24,6 +27,7 @@
 .DS_Store
 *.pem
 .workbuddy/
+/content-pipeline/
 
 # debug
 npm-debug.log*
