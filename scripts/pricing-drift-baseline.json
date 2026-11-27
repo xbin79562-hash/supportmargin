@@ -1,42 +1,111 @@
 {
   "schemaVersion": 1,
-  "generatedAt": null,
+  "generatedAt": "2026-11-27T11:56:24.647Z",
   "products": {
     "gorgias": {
       "pricingUrl": "https://www.gorgias.com/pricing",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:22.193Z",
+      "summaryHash": "5af6891b07dbf25c34ea2eba8d0233c39859742261aaf6b0bb5f140db36f05ba",
+      "visiblePrices": [
+        "$40",
+        "$10",
+        "$30",
+        "$90",
+        "$60",
+        "$550",
+        "$360",
+        "$190",
+        "$1,430",
+        "$900",
+        "$530",
+        "$0.40",
+        "$36",
+        "$1.00",
+        "$0.90",
+        "$0.85"
+      ]
     },
     "smartsupp": {
       "pricingUrl": "https://www.smartsupp.com/pricing/",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:23.539Z",
+      "summaryHash": "0195048a1d4995329fc1d917e2b9eb55d4d860c7a8c9dccecb94f1d62e496292",
+      "visiblePrices": [
+        "$0",
+        "$17",
+        "$85",
+        "$25",
+        "$127",
+        "$83",
+        "$421",
+        "$280",
+        "$19",
+        "$60",
+        "$59",
+        "$180",
+        "$24"
+      ]
     },
     "text": {
       "pricingUrl": "https://www.text.com/pricing/",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:23.780Z",
+      "summaryHash": "5e4d2a9bcf2b54e8a778e78b0c2913b83679c8d158c755fc0ffec9b0e9034e04",
+      "visiblePrices": [
+        "$19",
+        "$79",
+        "$1.5",
+        "$25",
+        "$99",
+        "$49.50",
+        "$29.50",
+        "$10",
+        "$200",
+        "$500"
+      ]
     },
     "helpdesk": {
       "pricingUrl": "https://www.helpdesk.com/pricing/",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:24.140Z",
+      "summaryHash": "ae9ead17e4cff678db04293fbf4f8d11093879000aa519054c88d49f74e00697",
+      "visiblePrices": [
+        "$19",
+        "$79",
+        "$1.5",
+        "$25",
+        "$99",
+        "$49.50"
+      ]
     },
     "livechat": {
       "pricingUrl": "https://www.livechat.com/pricing/",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:24.464Z",
+      "summaryHash": "df31d12262e04b9b96c43031ddf72a164024a65b3409bd3a8f5169c345d5a23f",
+      "visiblePrices": [
+        "$19",
+        "$1.5",
+        "$79",
+        "$49.50",
+        "$29.50"
+      ]
     },
     "zipchat": {
       "pricingUrl": "https://zipchat.ai/pricing",
-      "checkedAt": null,
-      "summaryHash": null,
-      "visiblePrices": []
+      "checkedAt": "2026-11-27T11:56:24.647Z",
+      "summaryHash": "289a6e6ff0c46a1954252d343eb7b05165312b2332cc91b7662d738848d88d44",
+      "visiblePrices": [
+        "$64",
+        "$768",
+        "$49",
+        "$240",
+        "$2,880",
+        "$480",
+        "$5,760",
+        "$960",
+        "$11,520",
+        "$2,100",
+        "$80",
+        "$0.02",
+        "$20"
+      ]
     }
   }
 }
